@@ -1,5 +1,5 @@
 {
-    "name": "mymod",
+    "name": "pushpin",
     "version": "1.0.0",
     "dependencies": [
         "directx-headers"
