@@ -279,7 +279,23 @@ void PinCushion::OnDrawUI(bool p_HasFocus) {
 		return;
 
 	if (ImGui::Begin("PIN CUSHION", &m_ShowMessage)) {
-		ImGui::Checkbox("Disable Rate Blocking", &this->disableRateBlock);
+		static size_t selected = 0;
+		static std::string titleBuff;
+
+		auto lock = std::shared_lock(displayDataLock);
+
+		ImGui::Checkbox("Rate Blocking", &this->enableRateBlock);
+		ImGui::SameLine();
+		ImGui::SetNextItemWidth(120);
+		if (ImGui::InputInt("Rate Limit", &uiRateLimit, 1, 120))
+			this->updateDataAction = UpdateDataAction::RateLimit;
+		if (ImGui::BeginItemTooltip()) {
+			ImGui::TextUnformatted("The number of times per-second a pin is allowed to be fired without being blocked. This is checked every 3 seconds, so one-off 'rapid-fire' pins may be spared if this number is not low.");
+			ImGui::EndTooltip();
+		}
+		ImGui::SameLine();
+		if (ImGui::Button("Reset Blacklist") && !this->haveUpdateDataAction())
+			this->updateDataAction = UpdateDataAction::ClearBlacklist;
 
 		if (pinData.empty()) {
 			ImGui::BeginChild("left pane", ImVec2(300, 0), true, ImGuiWindowFlags_HorizontalScrollbar);
@@ -287,23 +303,15 @@ void PinCushion::OnDrawUI(bool p_HasFocus) {
 			ImGui::EndChild();
 		}
 		else {
-			static size_t selected = 0;
-			static std::string titleBuff;
-
-			auto lock = std::shared_lock(displayDataLock);
-
 			auto frozen = !frozenPinData.empty();
 			auto& activeList = frozen ? frozenPinData : displayPinData;
 
 			ImGui::SameLine();
-			if (ImGui::Button("Clear") && !this->haveUpdateDataAction())
-				this->updateDataAction = UpdateDataAction::Clear;
-			ImGui::SameLine();
-			if (ImGui::Button("Reset Blacklist") && !this->haveUpdateDataAction())
-				this->updateDataAction = UpdateDataAction::ClearBlacklist;
-			ImGui::SameLine();
 			if (ImGui::Button(frozen ? "Unfreeze" : "Freeze") && !this->haveUpdateDataAction())
 				this->updateDataAction = UpdateDataAction::ToggleFreeze;
+			ImGui::SameLine();
+			if (ImGui::Button("Clear") && !this->haveUpdateDataAction())
+				this->updateDataAction = UpdateDataAction::Clear;
 
 			ImGui::BeginChild("left pane", ImVec2(300, 0), true, ImGuiWindowFlags_HorizontalScrollbar);
 			
@@ -364,10 +372,8 @@ void PinCushion::OnDrawUI(bool p_HasFocus) {
 					ImGui::SameLine();
 					ImGui::TextUnformatted(call.data.c_str());
 
-
 					ImGui::Text("Entity Name: %s", call.entityName.c_str());
 					ImGui::Text("Entity Type: %s", call.entityType.empty() ? "(none)" : call.entityType.c_str());
-
 
 					ImGui::TextUnformatted("Entity Props");
 
@@ -385,6 +391,8 @@ void PinCushion::OnDrawUI(bool p_HasFocus) {
 void PinCushion::OnFrameUpdate(const SGameUpdateEvent &p_UpdateEvent) {
 	if (this->haveUpdateDataAction()) {
 		auto lock = std::unique_lock(displayDataLock);
+		if (uiRateLimit != rateLimit)
+			rateLimit = uiRateLimit;
 		switch (this->getUpdateDataAction()) {
 		case UpdateDataAction::Clear:
 			pinData.clear();
@@ -394,6 +402,9 @@ void PinCushion::OnFrameUpdate(const SGameUpdateEvent &p_UpdateEvent) {
 			auto it = std::find_if(pinData.begin(), pinData.end(), [this](const PinData& v) { return static_cast<ZHMPin>(v.id) == this->blacklistPin; });
 			if (it != pinData.end())
 				pinData.erase(it);
+			auto displayIt = std::find_if(displayPinData.begin(), displayPinData.end(), [this](const PinData& v) { return static_cast<ZHMPin>(v.id) == this->blacklistPin; });
+			if (displayIt != displayPinData.end())
+				displayPinData.erase(displayIt);
 			break;
 		}
 		case UpdateDataAction::ClearBlacklist:
@@ -411,12 +422,12 @@ void PinCushion::OnFrameUpdate(const SGameUpdateEvent &p_UpdateEvent) {
 	}
 
 	auto now = std::chrono::system_clock::now();
-	if (!this->disableRateBlock) {
+	if (this->enableRateBlock) {
 		auto secs = std::chrono::duration<double>(now - this->lastCleanupTime).count();
 
-		if (secs >= 1.5) {
+		if (secs >= 3) {
 			for (auto freqIt = pinFrequency.begin(); freqIt != pinFrequency.end(); ++freqIt) {
-				if (freqIt->second < static_cast<uint64>(secs) * 12) continue;
+				if (freqIt->second < static_cast<uint64>(secs / 3) * rateLimit) continue;
 				auto it = std::find_if(this->pinData.begin(), this->pinData.end(), [freqIt](const PinData& v) { return static_cast<ZHMPin>(v.id) == freqIt->first; });
 				if (it != this->pinData.end())
 					this->pinData.erase(it);
@@ -582,7 +593,7 @@ DEFINE_PLUGIN_DETOUR(PinCushion, bool, OnPinOutput, ZEntityRef entity, uint32 pi
 		}
 	}
 
-	if (!this->disableRateBlock) {
+	if (this->enableRateBlock) {
 		auto freqIt = pinFrequency.find(static_cast<ZHMPin>(pinId));
 		if (freqIt == pinFrequency.end()) freqIt = pinFrequency.emplace(static_cast<ZHMPin>(pinId), 1).first;
 		else ++freqIt->second;

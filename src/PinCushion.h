@@ -55,6 +55,7 @@ enum class UpdateDataAction {
 	Clear,
 	ClearBlacklist,
 	ToggleFreeze,
+	RateLimit,
 };
 
 class PinCushion : public IPluginInterface {
@@ -98,7 +99,9 @@ private:
 	double lastFreqPruneTime = 0;
 	UpdateDataAction updateDataAction = UpdateDataAction::None;
 	ZHMPin blacklistPin = static_cast<ZHMPin>(0);
-	bool disableRateBlock = false;
+	uint64 rateLimit = 15;
+	int uiRateLimit = 15;
+	bool enableRateBlock = true;
 	bool hooksInstalled = false;
 	bool m_ShowMessage = false;
 };
