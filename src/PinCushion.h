@@ -34,6 +34,7 @@ struct PinCallData {
 	std::string entityId;
 	std::string entityName;
 	std::string entityType;
+	std::string entityTree;
 	std::string entityTblu;
 	std::string entityPrim;
 	std::string data;
@@ -95,6 +96,7 @@ private:
 	std::chrono::system_clock::time_point lastCleanupTime;
 	std::chrono::system_clock::time_point lastDisplayUpdateTime;
 	std::shared_mutex displayDataLock;
+	std::shared_mutex filterInputLock;
 	double lastLogTime = 0;
 	double lastFreqPruneTime = 0;
 	UpdateDataAction updateDataAction = UpdateDataAction::None;
@@ -104,6 +106,8 @@ private:
 	bool enableRateBlock = true;
 	bool hooksInstalled = false;
 	bool m_ShowMessage = false;
+	char filterInput[40] = "";
+	std::string_view filterInputSV;
 };
 
 DEFINE_ZHM_PLUGIN(PinCushion)

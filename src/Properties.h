@@ -123,5 +123,7 @@ public:
     static PropertyInfo SColorRGBProperty(STypeID* p_Property, void* p_Data);
     static PropertyInfo SColorRGBAProperty(STypeID* p_Property, void* p_Data);
 
+	static PropertyInfo ZRepositoryIDProperty(STypeID* p_Property, void* p_Data);
+
     static PropertyInfo ResourceProperty(STypeID* p_Property, void* p_Data);
 };

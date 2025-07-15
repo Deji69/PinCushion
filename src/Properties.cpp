@@ -4,7 +4,7 @@
 #include <string>
 
 PropertyInfo Properties::UnsupportedProperty(STypeID* p_Type, void* p_Data) {
-    return std::string(p_Type->typeInfo()->m_pTypeName);
+    return "<" + std::string(p_Type->typeInfo()->m_pTypeName) + ">";
 }
 
 PropertyInfo Properties::StringProperty(STypeID* p_Type, void* p_Data) {
@@ -104,4 +104,8 @@ PropertyInfo Properties::SVector3Property(STypeID* p_Type, void* p_Data) {
 
 PropertyInfo Properties::SVector4Property(STypeID* p_Type, void* p_Data) {
     return *static_cast<SVector4*>(p_Data);
+}
+
+PropertyInfo Properties::ZRepositoryIDProperty(STypeID* p_Type, void* p_Data) {
+    return std::string(static_cast<ZRepositoryID*>(p_Data)->ToString());
 }

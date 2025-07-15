@@ -176,6 +176,8 @@ static auto ZObjectRefToString(const ZObjectRef& obj, std::string& out) {
 			prop = Properties::EnumProperty(type, reinterpret_cast<const ZObjectRefAccessible&>(obj).GetData());
 		else if (type->typeInfo()->isResource())
 			prop = Properties::ResourceProperty(type, obj.As<ZResourcePtr>());
+		else if (s_TypeName == "ZRepositoryID")
+			prop = Properties::ZRepositoryIDProperty(type, obj.As<ZRepositoryID>());
 		//else if (s_TypeName.starts_with("TEntityRef<"))
 		//	Properties::TEntityRefProperty(s_InputId, s_Entity, s_Property, s_Data);
 		else {
@@ -190,6 +192,21 @@ static auto ZObjectRefToString(const ZObjectRef& obj, std::string& out) {
 	out = "";
 }
 
+static auto getEntityLeafName(ZEntityRef entity) -> std::string {
+	auto s_Factory = reinterpret_cast<ZTemplateEntityBlueprintFactory*>(entity.GetBlueprintFactory());
+	auto type = entity->GetType();
+	if (!type) return "???";
+	const auto& s_Interfaces = *type->m_pInterfaces;
+	return std::string(s_Interfaces[0].m_pTypeId->typeInfo()->m_pTypeName);
+
+}
+
+static auto getEntityTree(ZEntityRef entity) -> std::string {
+	if (!entity) return "";
+	if (entity.GetLogicalParent())
+		return getEntityTree(entity.GetLogicalParent()) + " > " + getEntityLeafName(entity);
+	return getEntityLeafName(entity);
+}
 
 static auto displayProperties(PinCallData& call) -> void {
 	for (auto& prop : call.props) {
@@ -205,15 +222,7 @@ static auto displayProperties(PinCallData& call) -> void {
 
 		ImGui::PushItemWidth(-1);
 
-		if (prop.primitiveValue)
-			ImGui::LabelText(prop.inputId.c_str(), "%s", prop.primitiveValue->c_str());
-		else if (prop.vec2Value)
-			ImGui::DragFloat2(prop.inputId.c_str(), &prop.vec2Value->x, 0.1f, ImGuiSliderFlags_NoInput);
-		else if (prop.vec3Value)
-			ImGui::DragFloat3(prop.inputId.c_str(), &prop.vec3Value->x, 0.1f, ImGuiSliderFlags_NoInput);
-		else if (prop.vec4Value)
-			ImGui::DragFloat4(prop.inputId.c_str(), &prop.vec4Value->x, 0.1f, ImGuiSliderFlags_NoInput);
-		else if (prop.rgb)
+		if (prop.rgb)
 			ImGui::ColorEdit3(prop.inputId.c_str(), &prop.rgb->r, ImGuiColorEditFlags_NoInputs);
 		else if (prop.rgba)
 			ImGui::ColorEdit4(prop.inputId.c_str(), &prop.rgba->r, ImGuiColorEditFlags_NoInputs);
@@ -232,13 +241,13 @@ static auto displayProperties(PinCallData& call) -> void {
 				ImGui::EndCombo();
 			}
 		}
-		else if (prop.matrixValue) {
-			ImGui::LabelText((prop.inputId + "x").c_str(), "%f", prop.matrixValue->XAxis.x);
-			ImGui::LabelText((prop.inputId + "y").c_str(), "%f", prop.matrixValue->YAxis.x);
-			ImGui::LabelText((prop.inputId + "z").c_str(), "%f", prop.matrixValue->ZAxis.x);
-			ImGui::LabelText((prop.inputId + "t").c_str(), "%f", prop.matrixValue->Trans.x);
+		else {
+			auto& str = prop.ToString();
+			if (str.empty())
+				ImGui::LabelText((prop.inputId + "t").c_str(), "%s", "<error>");
+			else
+				ImGui::LabelText(prop.inputId.c_str(), "%s", str.c_str());
 		}
-		else ImGui::LabelText((prop.inputId + "t").c_str(), "%s", "<error>");
 		ImGui::Separator();
 	}
 }
@@ -282,7 +291,7 @@ void PinCushion::OnDrawUI(bool p_HasFocus) {
 		static size_t selected = 0;
 		static std::string titleBuff;
 
-		auto lock = std::shared_lock(displayDataLock);
+		auto lock = std::unique_lock(displayDataLock);
 
 		ImGui::Checkbox("Rate Blocking", &this->enableRateBlock);
 		ImGui::SameLine();
@@ -297,54 +306,56 @@ void PinCushion::OnDrawUI(bool p_HasFocus) {
 		if (ImGui::Button("Reset Blacklist") && !this->haveUpdateDataAction())
 			this->updateDataAction = UpdateDataAction::ClearBlacklist;
 
-		if (pinData.empty()) {
-			ImGui::BeginChild("left pane", ImVec2(300, 0), true, ImGuiWindowFlags_HorizontalScrollbar);
+		auto frozen = !frozenPinData.empty();
+		auto& activeList = frozen ? frozenPinData : displayPinData;
+
+		ImGui::SameLine();
+		if (ImGui::Button(frozen ? "Unfreeze" : "Freeze") && !this->haveUpdateDataAction())
+			this->updateDataAction = UpdateDataAction::ToggleFreeze;
+		ImGui::SameLine();
+		if (ImGui::Button("Clear") && !this->haveUpdateDataAction())
+			this->updateDataAction = UpdateDataAction::Clear;
+
+		ImGui::BeginChild("left pane", ImVec2(300, 0), true, ImGuiWindowFlags_HorizontalScrollbar);
+
+		if (ImGui::InputText("Filter", filterInput, sizeof(filterInput))) {
+			auto lock = std::unique_lock(filterInputLock);
+			filterInputSV = filterInput;
+		}
+			
+		size_t current = 0;
+
+		if (activeList.empty()) {
 			ImGui::TextUnformatted("No Data");
-			ImGui::EndChild();
 		}
 		else {
-			auto frozen = !frozenPinData.empty();
-			auto& activeList = frozen ? frozenPinData : displayPinData;
+			for (auto it = activeList.begin(); it != activeList.end(); ++it, ++current) {
+				auto& data = *it;
+				auto title = data.name.c_str();
 
-			ImGui::SameLine();
-			if (ImGui::Button(frozen ? "Unfreeze" : "Freeze") && !this->haveUpdateDataAction())
-				this->updateDataAction = UpdateDataAction::ToggleFreeze;
-			ImGui::SameLine();
-			if (ImGui::Button("Clear") && !this->haveUpdateDataAction())
-				this->updateDataAction = UpdateDataAction::Clear;
-
-			ImGui::BeginChild("left pane", ImVec2(300, 0), true, ImGuiWindowFlags_HorizontalScrollbar);
-			
-			size_t current = 0;
-
-			if (!activeList.empty()) {
-				for (auto it = activeList.begin(); it != activeList.end(); ++it, ++current) {
-					auto& data = *it;
-					auto title = data.name.c_str();
-					if (data.calls.size() > 1) {
-						titleBuff = title;
-						titleBuff += " (" + std::to_string(data.timesCalled) + ")";
-						title = titleBuff.c_str();
-					}
-					if (ImGui::Selectable(title, selected == current))
-						selected = current;
+				if (data.calls.size() > 1) {
+					titleBuff = title;
+					titleBuff += " (" + std::to_string(data.timesCalled) + ")";
+					title = titleBuff.c_str();
 				}
+				if (ImGui::Selectable(title, selected == current))
+					selected = current;
 			}
-			else ImGui::TextUnformatted("No Data");
+		}
 
-			ImGui::EndChild();
+		ImGui::EndChild();
 
-			ImGui::SameLine();
+		ImGui::SameLine();
 
-			ImGui::BeginGroup();
-			ImGui::BeginChild("pin view", ImVec2(0, -ImGui::GetFrameHeightWithSpacing()));
+		ImGui::BeginGroup();
+		ImGui::BeginChild("pin view", ImVec2(0, -ImGui::GetFrameHeightWithSpacing()));
 
+		if (!activeList.empty()) {
 			auto it = activeList.begin();
 			std::advance(it, selected);
 
 			if (selected > 0 && selected >= activeList.size())
 				selected = activeList.size() - 1;
-
 
 			ImGui::SameLine();
 
@@ -353,37 +364,39 @@ void PinCushion::OnDrawUI(bool p_HasFocus) {
 				this->blacklistPin = static_cast<ZHMPin>(it->id);
 			}
 
-			if (!activeList.empty()) {
-				auto pinIt = activeList.begin();
-				std::advance(pinIt, selected < (activeList.size() - 1) ? selected : activeList.size() - 1);
-				auto& pin = *pinIt;
-				current = 0;
+			auto pinIt = activeList.begin();
+			std::advance(pinIt, selected < (activeList.size() - 1) ? selected : activeList.size() - 1);
+			auto& pin = *pinIt;
+			current = 0;
 
-				ImGui::TextUnformatted("Pin Name: ");
+			ImGui::TextUnformatted("Pin Name: ");
+			ImGui::SameLine();
+			ImGui::TextUnformatted(pin.name.c_str());
+
+			ImGui::NewLine();
+
+			for (auto it = pin.calls.begin(); current < std::min<size_t>(pin.calls.size(), 5) && it != pin.calls.end(); ++it, ++current) {
+				auto& call = *it;
+
+				ImGui::TextUnformatted("Data: ");
 				ImGui::SameLine();
-				ImGui::TextUnformatted(pin.name.c_str());
+				ImGui::TextUnformatted(call.data.c_str());
 
-				ImGui::NewLine();
+				ImGui::Text("Entity Name: %s", call.entityName.c_str());
+				ImGui::Text("Entity Type: %s", call.entityType.empty() ? "(none)" : call.entityType.c_str());
+				ImGui::Text("Entity Tblu: %s", call.entityTblu.empty() ? "(none)" : call.entityType.c_str());
+				ImGui::Text("Entity Prim: %s", call.entityPrim.empty() ? "(none)" : call.entityType.c_str());
 
-				for (auto it = pin.calls.begin(); current < std::min<size_t>(pin.calls.size(), 5) && it != pin.calls.end(); ++it, ++current) {
-					auto& call = *it;
+				ImGui::Text("Entity Tree: %s", call.entityTree.c_str());
 
-					ImGui::TextUnformatted("Data: ");
-					ImGui::SameLine();
-					ImGui::TextUnformatted(call.data.c_str());
+				ImGui::TextUnformatted("Entity Props");
 
-					ImGui::Text("Entity Name: %s", call.entityName.c_str());
-					ImGui::Text("Entity Type: %s", call.entityType.empty() ? "(none)" : call.entityType.c_str());
-
-					ImGui::TextUnformatted("Entity Props");
-
-					displayProperties(call);
-				}
+				displayProperties(call);
 			}
-
-			ImGui::EndChild();
-			ImGui::EndGroup();
 		}
+
+		ImGui::EndChild();
+		ImGui::EndGroup();
 	}
 	ImGui::End();
 }
@@ -444,8 +457,13 @@ void PinCushion::OnFrameUpdate(const SGameUpdateEvent &p_UpdateEvent) {
 	auto secsSinceUpdate = std::chrono::duration<double>(now - this->lastDisplayUpdateTime).count();
 	if (secsSinceUpdate > .15) {
 		auto lock = std::unique_lock(displayDataLock);
+		auto filterLock = std::shared_lock(filterInputLock);
 		this->displayPinData.clear();
-		std::copy(this->pinData.begin(), this->pinData.end(), std::back_inserter(displayPinData));
+		for (auto& data : this->pinData) {
+			auto filterThisPin = !filterInputSV.empty() && !data.name.starts_with(filterInputSV);
+			if (filterThisPin) continue;
+			this->displayPinData.push_back(data);
+		}
 		this->lastDisplayUpdateTime = now;
 	}
 }
@@ -499,6 +517,7 @@ DEFINE_PLUGIN_DETOUR(PinCushion, bool, OnPinOutput, ZEntityRef entity, uint32 pi
 	const auto& s_Interfaces = *entity->GetType()->m_pInterfaces;
 	callData.entityId = fmt::format("Entity ID: {:016x}", entity->GetType()->m_nEntityId);
 	callData.entityType = s_Interfaces[0].m_pTypeId->typeInfo()->m_pTypeName;
+	callData.entityTree = getEntityTree(entity);
 
 	if (s_EntityType && s_EntityType->m_pProperties01) {
 		for (uint32_t i = 0; i < s_EntityType->m_pProperties01->size(); ++i) {
@@ -565,6 +584,8 @@ DEFINE_PLUGIN_DETOUR(PinCushion, bool, OnPinOutput, ZEntityRef entity, uint32 pi
 				prop = Properties::SColorRGBProperty(s_PropertyType, s_Data);
 			else if (s_TypeName == "SColorRGBA")
 				prop = Properties::SColorRGBAProperty(s_PropertyType, s_Data);
+			else if (s_TypeName == "ZRepositoryID")
+				prop = Properties::ZRepositoryIDProperty(s_PropertyType, s_Data);
 			else if (s_PropertyInfo->m_pType->typeInfo()->isEnum())
 				prop = Properties::EnumProperty(s_PropertyType, s_Data);
 			else if (s_PropertyInfo->m_pType->typeInfo()->isResource())
@@ -617,15 +638,22 @@ DEFINE_PLUGIN_DETOUR(PinCushion, bool, OnPinOutput, ZEntityRef entity, uint32 pi
 	}
 
 	zPinName = "";
-	auto isKnown = SDK()->GetPinName(pinId, zPinName);
+	auto name = SDK()->GetPinName(pinId, zPinName) ? std::string(zPinName) : std::to_string(pinId);
+	auto filterThisPin = false;
+	{
+		auto lock = std::shared_lock(filterInputLock);
+		filterThisPin = !filterInputSV.empty() && !name.starts_with(filterInputSV);
+	}
 
-	PinData pin;
-	pin.id = pinId;
-	pin.name = isKnown ? zPinName : std::to_string(pinId);
-	pin.calls.push_front(std::move(callData));
-	pinData.push_front(std::move(pin));
-	if (pinData.size() > 200)
-		pinData.resize(200);
+	if (!filterThisPin) {
+		PinData pin;
+		pin.id = pinId;
+		pin.name = name;
+		pin.calls.push_front(std::move(callData));
+		pinData.push_front(std::move(pin));
+		if (pinData.size() > 200)
+			pinData.resize(200);
+	}
 	return HookAction::Continue();
 }
 
