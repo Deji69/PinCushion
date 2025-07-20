@@ -382,6 +382,7 @@ void PinCushion::OnDrawUI(bool p_HasFocus) {
 				ImGui::SameLine();
 				ImGui::TextUnformatted(call.data.c_str());
 
+				ImGui::TextUnformatted(call.entityId.c_str());
 				ImGui::Text("Entity Name: %s", call.entityName.c_str());
 				ImGui::Text("Entity Type: %s", call.entityType.empty() ? "(none)" : call.entityType.c_str());
 				ImGui::Text("Entity Tblu: %s", call.entityTblu.empty() ? "(none)" : call.entityType.c_str());
@@ -418,6 +419,9 @@ void PinCushion::OnFrameUpdate(const SGameUpdateEvent &p_UpdateEvent) {
 			auto displayIt = std::find_if(displayPinData.begin(), displayPinData.end(), [this](const PinData& v) { return static_cast<ZHMPin>(v.id) == this->blacklistPin; });
 			if (displayIt != displayPinData.end())
 				displayPinData.erase(displayIt);
+			auto frozenIt = std::find_if(frozenPinData.begin(), frozenPinData.end(), [this](const PinData& v) { return static_cast<ZHMPin>(v.id) == this->blacklistPin; });
+			if (frozenIt != frozenPinData.end())
+				frozenPinData.erase(frozenIt);
 			break;
 		}
 		case UpdateDataAction::ClearBlacklist:
