@@ -378,6 +378,8 @@ void PinCushion::OnDrawUI(bool p_HasFocus) {
 			for (auto it = pin.calls.begin(); current < std::min<size_t>(pin.calls.size(), 5) && it != pin.calls.end(); ++it, ++current) {
 				auto& call = *it;
 
+				ImGui::Indent(20);
+
 				ImGui::TextUnformatted("Data: ");
 				ImGui::SameLine();
 				ImGui::TextUnformatted(call.data.c_str());
@@ -391,6 +393,8 @@ void PinCushion::OnDrawUI(bool p_HasFocus) {
 				ImGui::TextUnformatted("Entity Props");
 
 				displayProperties(call);
+
+				ImGui::Separator();
 			}
 		}
 
