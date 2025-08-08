@@ -385,8 +385,6 @@ void PinCushion::OnDrawUI(bool p_HasFocus) {
 				ImGui::TextUnformatted(call.entityId.c_str());
 				ImGui::Text("Entity Name: %s", call.entityName.c_str());
 				ImGui::Text("Entity Type: %s", call.entityType.empty() ? "(none)" : call.entityType.c_str());
-				ImGui::Text("Entity Tblu: %s", call.entityTblu.empty() ? "(none)" : call.entityType.c_str());
-				ImGui::Text("Entity Prim: %s", call.entityPrim.empty() ? "(none)" : call.entityType.c_str());
 
 				ImGui::Text("Entity Tree: %s", call.entityTree.c_str());
 
@@ -505,17 +503,6 @@ DEFINE_PLUGIN_DETOUR(PinCushion, bool, OnPinOutput, ZEntityRef entity, uint32 pi
 
 		if (s_Index != -1 && s_Factory->m_pTemplateEntityBlueprint)
 			callData.entityName = s_Factory->m_pTemplateEntityBlueprint->subEntities[s_Index].entityName;
-
-		callData.entityTblu = s_Factory->m_ridResource.GetID();
-
-		if (const ZGeomEntity* s_GeomEntity = entity.QueryInterface<ZGeomEntity>()) {
-			if (s_GeomEntity->m_ResourceID.m_nResourceIndex != -1) {
-				const auto& s_PrimResourceInfo = (*Globals::ResourceContainer)->m_resources[s_GeomEntity->m_ResourceID.m_nResourceIndex];
-				const auto s_PrimHash = s_PrimResourceInfo.rid.GetID();
-
-				callData.entityPrim = fmt::format("Associated PRIM: {:016X}", s_PrimHash);
-			}
-		}
 	}
 
 	const auto& s_Interfaces = *entity->GetType()->m_pInterfaces;

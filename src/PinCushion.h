@@ -35,8 +35,6 @@ struct PinCallData {
 	std::string entityName;
 	std::string entityType;
 	std::string entityTree;
-	std::string entityTblu;
-	std::string entityPrim;
 	std::string data;
 	std::vector<PropertyInfo> props;
 };
