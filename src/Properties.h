@@ -123,7 +123,8 @@ public:
     static PropertyInfo SColorRGBProperty(STypeID* p_Property, void* p_Data);
     static PropertyInfo SColorRGBAProperty(STypeID* p_Property, void* p_Data);
 
-	static PropertyInfo ZRepositoryIDProperty(STypeID* p_Property, void* p_Data);
+	static PropertyInfo ZRepositoryIDProperty(STypeID* p_Property, ZRepositoryID* p_Data);
+    static PropertyInfo ZDynamicObjectProperty(STypeID* p_Property, ZDynamicObject* p_Data);
 
     static PropertyInfo ResourceProperty(STypeID* p_Property, void* p_Data);
 };

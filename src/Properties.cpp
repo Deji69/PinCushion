@@ -3,6 +3,52 @@
 #include <imgui.h>
 #include <string>
 
+using namespace std::string_literals;
+
+static auto ZDynamicObjectToString(ZDynamicObject& obj) -> std::string {
+	// Handle the main object structure so we can invoke ourselves for individual entries.
+	if (obj.Is<TArray<SDynamicObjectKeyValuePair>>()) {
+		auto arr = obj.As<TArray<SDynamicObjectKeyValuePair>>();
+		auto first = true;
+		auto str = std::ostringstream();
+		str << "{";
+
+		for (auto& entry : *arr) {
+			if (!first) str << ",";
+			first = false;
+
+			auto objStr = ZDynamicObjectToString(entry.value);
+
+			// Key should never contain quotes but we'll do quoted to be on the safe side + it's neater.
+			str << std::quoted(entry.sKey.c_str()) << ":" << objStr.c_str();
+		}
+
+		str << "}";
+		return str.str();
+	}
+
+	if (obj.Is<ZString>()) {
+		// Remove null terminator from strings.
+		auto res = obj.As<ZString>();
+		auto resSV = std::string_view(res->c_str(), res->size());
+		auto fixedStr = std::string(resSV.size(), '\0');
+		std::remove_copy(resSV.cbegin(), resSV.cend(), fixedStr.begin(), '\n');
+
+		// Quote the string.
+		return (std::ostringstream() << std::quoted(fixedStr.c_str())).str();
+	}
+
+	if (obj.Is<SVector3>()) {
+		auto res = obj.As<SVector3>();
+		return (std::ostringstream() << std::quoted(std::to_string(res->x) + "," + std::to_string(res->y) + "," + std::to_string(res->z))).str();
+	}
+
+	// Use the game method for anything we don't need to handle.
+	ZString res;
+	Functions::ZDynamicObject_ToString->Call(const_cast<ZDynamicObject*>(&obj), &res);
+	return std::string{res.ToStringView()};
+}
+
 PropertyInfo Properties::UnsupportedProperty(STypeID* p_Type, void* p_Data) {
     return "<" + std::string(p_Type->typeInfo()->m_pTypeName) + ">";
 }
@@ -106,6 +152,10 @@ PropertyInfo Properties::SVector4Property(STypeID* p_Type, void* p_Data) {
     return *static_cast<SVector4*>(p_Data);
 }
 
-PropertyInfo Properties::ZRepositoryIDProperty(STypeID* p_Type, void* p_Data) {
-    return std::string(static_cast<ZRepositoryID*>(p_Data)->ToString());
+PropertyInfo Properties::ZRepositoryIDProperty(STypeID* p_Type, ZRepositoryID* p_Data) {
+    return std::string(p_Data->ToString());
+}
+
+PropertyInfo Properties::ZDynamicObjectProperty(STypeID* p_Type, ZDynamicObject* p_Data) {
+    return p_Data ? ZDynamicObjectToString(*p_Data) : "null"s;
 }

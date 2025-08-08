@@ -17,6 +17,8 @@
 #include <map>
 #include <string>
 
+using namespace std::string_literals;
+
 std::set<uint32> permaBlacklist = {
 	uint32(ZHMPin::OnDeactivate),
 	uint32(ZHMPin::OnTerminate),
@@ -178,6 +180,8 @@ static auto ZObjectRefToString(const ZObjectRef& obj, std::string& out) {
 			prop = Properties::ResourceProperty(type, obj.As<ZResourcePtr>());
 		else if (s_TypeName == "ZRepositoryID")
 			prop = Properties::ZRepositoryIDProperty(type, obj.As<ZRepositoryID>());
+		else if (s_TypeName == "ZDynamicObject")
+			prop = Properties::ZDynamicObjectProperty(type, obj.As<ZDynamicObject>());
 		//else if (s_TypeName.starts_with("TEntityRef<"))
 		//	Properties::TEntityRefProperty(s_InputId, s_Entity, s_Property, s_Data);
 		else {
@@ -580,7 +584,9 @@ DEFINE_PLUGIN_DETOUR(PinCushion, bool, OnPinOutput, ZEntityRef entity, uint32 pi
 			else if (s_TypeName == "SColorRGBA")
 				prop = Properties::SColorRGBAProperty(s_PropertyType, s_Data);
 			else if (s_TypeName == "ZRepositoryID")
-				prop = Properties::ZRepositoryIDProperty(s_PropertyType, s_Data);
+				prop = Properties::ZRepositoryIDProperty(s_PropertyType, static_cast<ZRepositoryID*>(s_Data));
+			else if (s_TypeName == "ZDynamicObject")
+				prop = Properties::ZDynamicObjectProperty(s_PropertyType, static_cast<ZDynamicObject*>(s_Data));
 			else if (s_PropertyInfo->m_pType->typeInfo()->isEnum())
 				prop = Properties::EnumProperty(s_PropertyType, s_Data);
 			else if (s_PropertyInfo->m_pType->typeInfo()->isResource())
