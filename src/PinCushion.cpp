@@ -18,6 +18,7 @@
 #include <string>
 
 using namespace std::string_literals;
+using namespace std::string_view_literals;
 
 std::set<uint32> permaBlacklist = {
 	uint32(ZHMPin::OnDeactivate),
@@ -196,8 +197,43 @@ static auto ZObjectRefToString(const ZObjectRef& obj, std::string& out) {
 	out = "";
 }
 
+static void CopyToClipboard(const std::string& p_String) {
+	if (!OpenClipboard(nullptr))
+		return;
+
+	EmptyClipboard();
+
+	const auto s_GlobalData = GlobalAlloc(GMEM_MOVEABLE, p_String.size() + 1);
+
+	if (!s_GlobalData) {
+		CloseClipboard();
+		return;
+	}
+
+	const auto s_GlobalDataPtr = GlobalLock(s_GlobalData);
+
+	if (!s_GlobalDataPtr) {
+		CloseClipboard();
+		GlobalFree(s_GlobalData);
+		return;
+	}
+
+	memset(s_GlobalDataPtr, 0, p_String.size() + 1);
+	memcpy(s_GlobalDataPtr, p_String.c_str(), p_String.size());
+
+	GlobalUnlock(s_GlobalData);
+
+	SetClipboardData(CF_TEXT, s_GlobalData);
+	CloseClipboard();
+}
+
+static auto getEntityLeafID(ZEntityRef entity) -> std::string {
+	auto type = entity->GetType();
+	if (!type) return "???";
+	return fmt::format("{:016x}", type->m_nEntityId);
+}
+
 static auto getEntityLeafName(ZEntityRef entity) -> std::string {
-	auto s_Factory = reinterpret_cast<ZTemplateEntityBlueprintFactory*>(entity.GetBlueprintFactory());
 	auto type = entity->GetType();
 	if (!type) return "???";
 	const auto& s_Interfaces = *type->m_pInterfaces;
@@ -205,15 +241,29 @@ static auto getEntityLeafName(ZEntityRef entity) -> std::string {
 
 }
 
-static auto getEntityTree(ZEntityRef entity) -> std::string {
-	if (!entity) return "";
-	if (entity.GetLogicalParent())
-		return getEntityTree(entity.GetLogicalParent()) + " > " + getEntityLeafName(entity);
-	return getEntityLeafName(entity);
+static auto getEntityTree(ZEntityRef entity, std::vector<NameIDPair>& tree) -> void {
+	if (!entity) return;
+	auto parent = entity.GetLogicalParent();
+	if (parent)
+		getEntityTree(parent, tree);
+	tree.push_back(NameIDPair{getEntityLeafID(entity), getEntityLeafName(entity)});
+}
+
+static auto getEntityTree(ZEntityRef entity) -> std::vector<NameIDPair> {
+	if (!entity) return {};
+	auto parent = entity.GetLogicalParent();
+	std::vector<NameIDPair> tree;
+	if (parent)
+		getEntityTree(parent, tree);
+	tree.push_back(NameIDPair{getEntityLeafID(entity), getEntityLeafName(entity)});
+	return tree;
 }
 
 static auto displayProperties(PinCallData& call) -> void {
+	auto separate = false;
 	for (auto& prop : call.props) {
+		if (separate) ImGui::Separator();
+		else separate = true;
 		ImGui::PushFont(SDK()->GetImGuiBoldFont());
 
 		ImGui::TextUnformatted(prop.name.c_str());
@@ -252,7 +302,6 @@ static auto displayProperties(PinCallData& call) -> void {
 			else
 				ImGui::LabelText(prop.inputId.c_str(), "%s", str.c_str());
 		}
-		ImGui::Separator();
 	}
 }
 
@@ -378,25 +427,53 @@ void PinCushion::OnDrawUI(bool p_HasFocus) {
 			ImGui::TextUnformatted(pin.name.c_str());
 
 			ImGui::NewLine();
+			
+			auto imGuiCopyableText = [](std::string_view text, std::string_view copyText = ""sv) {
+				ImVec4 linkColor = ImVec4(0.2f, 0.6f, 1.0f, 1.0f);
+				ImGui::PushStyleColor(ImGuiCol_Text, linkColor);
+				ImGui::TextUnformatted(text.data(), text.data() + text.size());
+				ImGui::PopStyleColor();
+
+				if (ImGui::IsItemClicked()) {
+					CopyToClipboard(std::string{ copyText.empty() ? text : copyText });
+				}
+				if (ImGui::IsItemHovered()) {
+					if (copyText.size())
+						ImGui::SetTooltip("%s - click to copy", copyText.data());
+					else
+						ImGui::SetTooltip("%s", "Click to copy");
+				}
+			};
 
 			for (auto it = pin.calls.begin(); current < std::min<size_t>(pin.calls.size(), 5) && it != pin.calls.end(); ++it, ++current) {
 				auto& call = *it;
-
-				ImGui::Indent(20);
 
 				ImGui::TextUnformatted("Data: ");
 				ImGui::SameLine();
 				ImGui::TextUnformatted(call.data.c_str());
 
-				ImGui::TextUnformatted(call.entityId.c_str());
+				ImGui::TextUnformatted("Entity ID:");
+				ImGui::SameLine(0, 1.0);
+				imGuiCopyableText(call.entityId);
+
 				ImGui::Text("Entity Name: %s", call.entityName.c_str());
 				ImGui::Text("Entity Type: %s", call.entityType.empty() ? "(none)" : call.entityType.c_str());
 
-				ImGui::Text("Entity Tree: %s", call.entityTree.c_str());
+				ImGui::TextUnformatted("Entity Tree:");
+				for (size_t i = 0; i < call.entityTree.size(); ++i) {
+					ImGui::SameLine(0, 1.0);
+					if (i != 0) {
+						ImGui::TextUnformatted(">");
+						ImGui::SameLine(0, 1.0);
+					}
+					imGuiCopyableText(call.entityTree[i].name, call.entityTree[i].id);
+				}
 
 				ImGui::TextUnformatted("Entity Props");
 
+				ImGui::Indent(20);
 				displayProperties(call);
+				ImGui::Unindent(20);
 
 				ImGui::Separator();
 			}
@@ -514,7 +591,7 @@ DEFINE_PLUGIN_DETOUR(PinCushion, bool, OnPinOutput, ZEntityRef entity, uint32 pi
 	}
 
 	const auto& s_Interfaces = *entity->GetType()->m_pInterfaces;
-	callData.entityId = fmt::format("Entity ID: {:016x}", entity->GetType()->m_nEntityId);
+	callData.entityId = fmt::format("{:016x}", entity->GetType()->m_nEntityId);
 	callData.entityType = s_Interfaces[0].m_pTypeId->typeInfo()->m_pTypeName;
 	callData.entityTree = getEntityTree(entity);
 

@@ -30,11 +30,19 @@
 #undef MIN
 #endif
 
+struct NameIDPair {
+	std::string id;
+	std::string name;
+
+	NameIDPair() = default;
+	NameIDPair(std::string id, std::string name) : id(id), name(name) {}
+};
+
 struct PinCallData {
 	std::string entityId;
 	std::string entityName;
 	std::string entityType;
-	std::string entityTree;
+	std::vector<NameIDPair> entityTree;
 	std::string data;
 	std::vector<PropertyInfo> props;
 };
