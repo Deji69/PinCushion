@@ -55,13 +55,13 @@ jobs:
     - name: Archive debug
       uses: actions/upload-artifact@v4
       with:
-        name: MyMod-Debug
+        name: PinCushion-Debug
         path: _dist-debug/*
 
     - name: Archive release
       uses: actions/upload-artifact@v4
       with:
-        name: MyMod-Release
+        name: PinCushion-Release
         path: _dist-release/*
 
   upload_release:
@@ -74,21 +74,21 @@ jobs:
     - name: Download debug artifact
       uses: actions/download-artifact@v4
       with:
-        name: MyMod-Debug
-        path: MyMod-Debug
+        name: PinCushion-Debug
+        path: PinCushion-Debug
 
     - name: Download release artifact
       uses: actions/download-artifact@v4
       with:
-        name: MyMod-Release
-        path: MyMod-Release
+        name: PinCushion-Release
+        path: PinCushion-Release
 
     - name: Archive artifact files
       run: |
-        cd MyMod-Debug
-        zip -r MyMod-Debug.zip *
-        cd ../MyMod-Release
-        zip -r MyMod-Release.zip *
+        cd PinCushion-Debug
+        zip -r PinCushion-Debug.zip *
+        cd ../PinCushion-Release
+        zip -r PinCushion-Release.zip *
         
     - name: Get release
       id: get_release
@@ -102,8 +102,8 @@ jobs:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
         upload_url: ${{ steps.get_release.outputs.upload_url }}
-        asset_path: MyMod-Debug/MyMod-Debug.zip
-        asset_name: MyMod-Debug.zip
+        asset_path: PinCushion-Debug/PinCushion-Debug.zip
+        asset_name: PinCushion-Debug.zip
         asset_content_type: application/zip
 
     - name: Upload release assets
@@ -112,6 +112,7 @@ jobs:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
         upload_url: ${{ steps.get_release.outputs.upload_url }}
-        asset_path: MyMod-Release/MyMod-Release.zip
-        asset_name: MyMod-Release.zip
+        asset_path: PinCushion-Release/PinCushion-Release.zip
+        asset_name: PinCushion-Release.zip
         asset_content_type: application/zip
+
