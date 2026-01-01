@@ -340,11 +340,12 @@ void PinCushion::OnDrawMenu() {
 void PinCushion::OnDrawUI(bool p_HasFocus) {
 	if (!m_ShowMessage)
 		return;
+	
+	ImGui::PushStyleVar(ImGuiStyleVar_WindowMinSize, { 600, 300 });
 
 	if (ImGui::Begin("PIN CUSHION", &m_ShowMessage)) {
 		static size_t selected = 0;
 		static std::string titleBuff;
-
 		auto lock = std::unique_lock(displayDataLock);
 
 		ImGui::Checkbox("Rate Blocking", &this->enableRateBlock);
@@ -484,6 +485,7 @@ void PinCushion::OnDrawUI(bool p_HasFocus) {
 		ImGui::EndGroup();
 	}
 	ImGui::End();
+	ImGui::PopStyleVar();
 }
 
 void PinCushion::OnFrameUpdate(const SGameUpdateEvent &p_UpdateEvent) {
