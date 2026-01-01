@@ -312,7 +312,8 @@ PinCushion::~PinCushion() {
 	// Unregister our frame update function when the mod unloads.
 	const ZMemberDelegate<PinCushion, void(const SGameUpdateEvent&)> s_Delegate(this, &PinCushion::OnFrameUpdate);
 	Globals::GameLoopManager->UnregisterFrameUpdate(s_Delegate, 1, EUpdateMode::eUpdateAlways);
-	Hooks::ZEntitySceneContext_LoadScene->RemoveDetour(&PinCushion::OnLoadScene);
+	//Hooks::ZEntitySceneContext_LoadScene->RemoveDetour(&PinCushion::OnLoadScene);
+	Hooks::SignalOutputPin->RemoveDetour(&PinCushion::OnPinOutput);
 }
 
 void PinCushion::OnEngineInitialized() {
@@ -323,7 +324,7 @@ void PinCushion::OnEngineInitialized() {
 	Globals::GameLoopManager->RegisterFrameUpdate(s_Delegate, 1, EUpdateMode::eUpdateAlways);
 
 	// Install a hook to print the name of the scene every time the game loads a new one.
-	Hooks::ZEntitySceneContext_LoadScene->AddDetour(this, &PinCushion::OnLoadScene);
+	//Hooks::ZEntitySceneContext_LoadScene->AddDetour(this, &PinCushion::OnLoadScene);
 
 	Hooks::SignalOutputPin->AddDetour(this, &PinCushion::OnPinOutput);
 	//Hooks::SignalInputPin->AddDetour(this, &PinCushion::OnPinInput);
@@ -553,12 +554,6 @@ void PinCushion::OnFrameUpdate(const SGameUpdateEvent &p_UpdateEvent) {
 		}
 		this->lastDisplayUpdateTime = now;
 	}
-}
-
-DEFINE_PLUGIN_DETOUR(PinCushion, void, OnLoadScene, ZEntitySceneContext* th, ZSceneData& p_SceneData) {
-	Logger::Debug("Loading scene: {}", p_SceneData.m_sceneName);
-	//pinData.clear();
-	return HookResult<void>(HookAction::Continue());
 }
 
 DEFINE_PLUGIN_DETOUR(PinCushion, bool, OnPinOutput, ZEntityRef entity, uint32 pinId, const ZObjectRef& data) {

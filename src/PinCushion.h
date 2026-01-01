@@ -5,6 +5,7 @@
 #include <Glacier/Pins.h>
 #include <Glacier/SGameUpdateEvent.h>
 #include <Glacier/ZEntity.h>
+#include <Glacier/ZGameContext.h>
 #include <Glacier/ZObject.h>
 #include <atomic>
 #include <chrono>
@@ -75,7 +76,7 @@ public:
 
 private:
 	void OnFrameUpdate(const SGameUpdateEvent& p_UpdateEvent);
-	DECLARE_PLUGIN_DETOUR(PinCushion, void, OnLoadScene, ZEntitySceneContext* th, ZSceneData& p_SceneData);
+	//DECLARE_PLUGIN_DETOUR(PinCushion, void, OnLoadScene, ZEntitySceneContext* th, ZSceneData& p_SceneData);
 	DECLARE_PLUGIN_DETOUR(PinCushion, bool, OnPinOutput, ZEntityRef entity, uint32 pinId, const ZObjectRef& data);
 	//DECLARE_PLUGIN_DETOUR(PinCushion, bool, OnPinInput, ZEntityRef entity, uint32 pinId, const ZObjectRef& data);
 

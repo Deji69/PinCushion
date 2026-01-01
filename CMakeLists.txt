@@ -4,14 +4,14 @@ project(PinCushion CXX)
 
 # Find latest version at https://github.com/OrfeasZ/ZHMModSDK/releases
 # Set ZHMMODSDK_DIR variable to a local directory to use a local copy of the ZHMModSDK.
-set(ZHMMODSDK_VER "v3.1.1")
+set(ZHMMODSDK_VER "v4.0.0-rc.2")
 include(cmake/setup-zhmmodsdk.cmake)
 include(cmake/get-cpm.cmake)
 
 # Set C++ standard to C++23.
 set(CMAKE_CXX_STANDARD 23)
 
-CPMAddPackage("gh:OrfeasZ/ZHMTools@3.6.4")
+CPMAddPackage("gh:OrfeasZ/ZHMTools@3.6.14")
 
 # Create the PinCushion mod library.
 add_library(PinCushion SHARED

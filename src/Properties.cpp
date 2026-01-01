@@ -1,4 +1,5 @@
 #include "Properties.h"
+#include "Functions.h"
 #include <format>
 #include <imgui.h>
 #include <string>
@@ -135,7 +136,7 @@ PropertyInfo Properties::SMatrix43Property(STypeID* p_Type, void* p_Data) {
 PropertyInfo Properties::ResourceProperty(STypeID* p_Type, void* p_Data) {
     auto* s_Resource = static_cast<ZResourcePtr*>(p_Data);
     std::string s_ResourceName = "null";
-    if (s_Resource && s_Resource->m_nResourceIndex >= 0)
+    if (s_Resource && s_Resource->m_nResourceIndex.val >= 0)
         s_ResourceName = std::format(" {}", s_Resource->GetResourceInfo().rid.GetID());
     return s_ResourceName;
 }
