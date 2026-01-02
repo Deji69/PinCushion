@@ -104,17 +104,21 @@ private:
 	std::chrono::system_clock::time_point lastDisplayUpdateTime;
 	std::shared_mutex displayDataLock;
 	std::shared_mutex filterInputLock;
+	std::shared_mutex filterEntityInputLock;
 	double lastLogTime = 0;
 	double lastFreqPruneTime = 0;
 	UpdateDataAction updateDataAction = UpdateDataAction::None;
 	ZHMPin blacklistPin = static_cast<ZHMPin>(0);
+	std::string blacklistEntityTypeName = "";
 	uint64 rateLimit = 15;
 	int uiRateLimit = 15;
 	bool enableRateBlock = true;
 	bool hooksInstalled = false;
 	bool m_ShowMessage = false;
 	char filterInput[40] = "";
+	char filterEntityInput[40] = "";
 	std::string_view filterInputSV;
+	std::string_view filterEntityInputSV;
 };
 
 DEFINE_ZHM_PLUGIN(PinCushion)

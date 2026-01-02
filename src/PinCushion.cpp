@@ -341,7 +341,7 @@ void PinCushion::OnDrawUI(bool p_HasFocus) {
 	if (!m_ShowMessage)
 		return;
 	
-	ImGui::PushStyleVar(ImGuiStyleVar_WindowMinSize, { 600, 300 });
+	ImGui::PushStyleVar(ImGuiStyleVar_WindowMinSize, { 650, 300 });
 
 	if (ImGui::Begin("PIN CUSHION", &m_ShowMessage)) {
 		static size_t selected = 0;
@@ -371,11 +371,16 @@ void PinCushion::OnDrawUI(bool p_HasFocus) {
 		if (ImGui::Button("Clear") && !this->haveUpdateDataAction())
 			this->updateDataAction = UpdateDataAction::Clear;
 
-		ImGui::BeginChild("left pane", ImVec2(300, 0), true, ImGuiWindowFlags_HorizontalScrollbar);
+		ImGui::BeginChild("left pane", ImVec2(350, 0), true, ImGuiWindowFlags_HorizontalScrollbar);
 
-		if (ImGui::InputText("Filter", filterInput, sizeof(filterInput))) {
+		if (ImGui::InputText("Filter Name", filterInput, sizeof(filterInput))) {
 			auto lock = std::unique_lock(filterInputLock);
 			filterInputSV = filterInput;
+		}
+			
+		if (ImGui::InputText("Filter Entity Type", filterEntityInput, sizeof(filterEntityInput))) {
+			auto lock = std::unique_lock(filterEntityInputLock);
+			filterEntityInputSV = filterEntityInput;
 		}
 			
 		size_t current = 0;
@@ -550,7 +555,7 @@ void PinCushion::OnFrameUpdate(const SGameUpdateEvent &p_UpdateEvent) {
 		auto filterLock = std::shared_lock(filterInputLock);
 		this->displayPinData.clear();
 		for (auto& data : this->pinData) {
-			auto filterThisPin = !filterInputSV.empty() && !data.name.starts_with(filterInputSV);
+			auto filterThisPin = (!filterInputSV.empty() && !data.name.starts_with(filterInputSV));
 			if (filterThisPin) continue;
 			this->displayPinData.push_back(data);
 		}
@@ -591,6 +596,10 @@ DEFINE_PLUGIN_DETOUR(PinCushion, bool, OnPinOutput, ZEntityRef entity, uint32 pi
 	callData.entityId = fmt::format("{:016x}", entity->GetType()->m_nEntityId);
 	callData.entityType = s_Interfaces[0].m_pTypeId->typeInfo()->m_pTypeName;
 	callData.entityTree = getEntityTree(entity);
+
+	if (pinCallEntityNameBlacklist.contains(std::make_pair(static_cast<ZHMPin>(pinId), callData.entityType))) {
+		return HookAction::Continue();
+	}
 
 	if (s_EntityType && s_EntityType->m_pProperties01) {
 		for (uint32_t i = 0; i < s_EntityType->m_pProperties01->size(); ++i) {
@@ -698,6 +707,14 @@ DEFINE_PLUGIN_DETOUR(PinCushion, bool, OnPinOutput, ZEntityRef entity, uint32 pi
 	auto lastPin = getRecentPinIterator(pinId);
 
 	if (lastPin != pinData.end()) {
+		auto addThisCall = true;
+		{
+			auto filterEntityLock = std::shared_lock(filterEntityInputLock);
+			if (!filterEntityInputSV.empty() && callData.entityType != filterEntityInputSV)
+				addThisCall = false;
+		}
+
+		if (addThisCall) {
 		++lastPin->timesCalled;
 
 		lastPin->calls.push_front(std::move(callData));
@@ -708,19 +725,22 @@ DEFINE_PLUGIN_DETOUR(PinCushion, bool, OnPinOutput, ZEntityRef entity, uint32 pi
 			pinData.push_front(std::move(*lastPin));
 			pinData.erase(lastPin);
 		}
+		}
 
 		return HookAction::Continue();
 	}
 
 	zPinName = "";
 	auto name = SDK()->GetPinName(pinId, zPinName) ? std::string(zPinName) : std::to_string(pinId);
-	auto filterThisPin = false;
+	auto addThisPin = false;
 	{
 		auto lock = std::shared_lock(filterInputLock);
-		filterThisPin = !filterInputSV.empty() && !name.starts_with(filterInputSV);
+		auto filterEntityLock = std::shared_lock(filterEntityInputLock);
+		addThisPin = (filterInputSV.empty() || name.starts_with(filterInputSV))
+			&& (filterEntityInputSV.empty() || callData.entityType.starts_with(filterEntityInputSV));
 	}
 
-	if (!filterThisPin) {
+	if (addThisPin) {
 		PinData pin;
 		pin.id = pinId;
 		pin.name = name;
