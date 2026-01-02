@@ -122,7 +122,7 @@ std::set<uint32> permaBlacklist = {
 	3492492454,
 };
 
-std::map<ZHMPin, uint32> pinFrequency;
+std::map<std::pair<ZHMPin, std::string>, uint32> pinCallFrequency;
 
 class ZObjectRefAccessible : public ZObjectRef {
 public:
@@ -377,7 +377,7 @@ void PinCushion::OnDrawUI(bool p_HasFocus) {
 			auto lock = std::unique_lock(filterInputLock);
 			filterInputSV = filterInput;
 		}
-			
+
 		if (ImGui::InputText("Filter Entity Type", filterEntityInput, sizeof(filterEntityInput))) {
 			auto lock = std::unique_lock(filterEntityInputLock);
 			filterEntityInputSV = filterEntityInput;
@@ -563,14 +563,27 @@ void PinCushion::OnFrameUpdate(const SGameUpdateEvent &p_UpdateEvent) {
 		auto secs = std::chrono::duration<double>(now - this->lastCleanupTime).count();
 
 		if (secs >= 3) {
-			for (auto freqIt = pinFrequency.begin(); freqIt != pinFrequency.end(); ++freqIt) {
+			for (auto freqIt = pinCallFrequency.begin(); freqIt != pinCallFrequency.end(); ++freqIt) {
 				if (freqIt->second < static_cast<uint64>(secs / 3) * rateLimit) continue;
-				auto it = std::find_if(this->pinData.begin(), this->pinData.end(), [freqIt](const PinData& v) { return static_cast<ZHMPin>(v.id) == freqIt->first; });
-				if (it != this->pinData.end())
-					this->pinData.erase(it);
-				this->pinBlacklist.insert(freqIt->first);
-				freqIt = pinFrequency.erase(freqIt);
-				if (freqIt == pinFrequency.end()) break;
+
+				auto it = std::find_if(this->pinData.begin(), this->pinData.end(), [freqIt](const PinData& v) { return static_cast<ZHMPin>(v.id) == freqIt->first.first; });
+				if (it != this->pinData.end()) {
+					for (auto callIt = it->calls.begin(); callIt != it->calls.end(); ) {
+						if (callIt->entityType != freqIt->first.second) {
+							++callIt;
+							continue;
+						}
+
+						callIt = it->calls.erase(callIt);
+					}
+
+					if (it->calls.empty())
+						this->pinData.erase(it);
+				}
+
+				this->pinCallEntityNameBlacklist.insert(freqIt->first);
+				freqIt = pinCallFrequency.erase(freqIt);
+				if (freqIt == pinCallFrequency.end()) break;
 			}
 
 			this->lastCleanupTime = now;
@@ -731,8 +744,8 @@ DEFINE_PLUGIN_DETOUR(PinCushion, bool, OnPinOutput, ZEntityRef entity, uint32 pi
 	}
 
 	if (this->enableRateBlock) {
-		auto freqIt = pinFrequency.find(static_cast<ZHMPin>(pinId));
-		if (freqIt == pinFrequency.end()) freqIt = pinFrequency.emplace(static_cast<ZHMPin>(pinId), 1).first;
+		auto freqIt = pinCallFrequency.find(std::make_pair(static_cast<ZHMPin>(pinId), callData.entityType));
+		if (freqIt == pinCallFrequency.end()) pinCallFrequency.emplace(std::make_pair(static_cast<ZHMPin>(pinId), callData.entityType), 1);
 		else ++freqIt->second;
 	}
 
@@ -747,16 +760,16 @@ DEFINE_PLUGIN_DETOUR(PinCushion, bool, OnPinOutput, ZEntityRef entity, uint32 pi
 		}
 
 		if (addThisCall) {
-		++lastPin->timesCalled;
+			++lastPin->timesCalled;
 
-		lastPin->calls.push_front(std::move(callData));
-		if (lastPin->calls.size() > 10)
-			lastPin->calls.resize(10);
+			lastPin->calls.push_front(std::move(callData));
+			if (lastPin->calls.size() > 10)
+				lastPin->calls.resize(10);
 
-		if (lastPin != pinData.begin()) {
-			pinData.push_front(std::move(*lastPin));
-			pinData.erase(lastPin);
-		}
+			if (lastPin != pinData.begin()) {
+				pinData.push_front(std::move(*lastPin));
+				pinData.erase(lastPin);
+			}
 		}
 
 		return HookAction::Continue();
