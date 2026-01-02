@@ -64,12 +64,12 @@ std::set<uint32> permaBlacklist = {
 	uint32(ZHMPin::OutRGBA),
 	uint32(ZHMPin::Vector2),
 	uint32(ZHMPin::Vector3),
-	uint32(ZHMPin::On),
-	uint32(ZHMPin::Off),
+	//uint32(ZHMPin::On),
+	//uint32(ZHMPin::Off),
 	uint32(ZHMPin::PositionOutput),
 	uint32(ZHMPin::RotationOutput),
 	uint32(ZHMPin::TimeOut),
-	uint32(ZHMPin::Done),
+	//uint32(ZHMPin::Done),
 	uint32(ZHMPin::Result),
 	uint32(ZHMPin::Invert),
 	uint32(ZHMPin::Same),
@@ -452,7 +452,26 @@ void PinCushion::OnDrawUI(bool p_HasFocus) {
 				}
 			};
 
+			int i = 0;
+
 			for (auto it = pin.calls.begin(); current < std::min<size_t>(pin.calls.size(), 5) && it != pin.calls.end(); ++it, ++current) {
+				auto blacklistEntityLabel = std::format("Blacklist Entity##{}", i++);
+				auto blacklistEntityTypeLabel = std::format("Blacklist Entity Type##{}", i++);
+
+				if (ImGui::Button(blacklistEntityLabel.c_str()) && !this->haveUpdateDataAction()) {
+					this->updateDataAction = UpdateDataAction::BlacklistCallEntity;
+					this->blacklistPin = static_cast<ZHMPin>(pin.id);
+					this->blacklistEntityID = it->entityId;
+				}
+
+				ImGui::SameLine();
+
+				if (ImGui::Button(blacklistEntityTypeLabel.c_str()) && !this->haveUpdateDataAction()) {
+					this->updateDataAction = UpdateDataAction::BlacklistCallEntityType;
+					this->blacklistPin = static_cast<ZHMPin>(pin.id);
+					this->blacklistEntityTypeName = it->entityType;
+				}
+
 				auto& call = *it;
 
 				ImGui::TextUnformatted("Data: ");
@@ -515,8 +534,18 @@ void PinCushion::OnFrameUpdate(const SGameUpdateEvent &p_UpdateEvent) {
 				frozenPinData.erase(frozenIt);
 			break;
 		}
+		case UpdateDataAction::BlacklistCallEntity: {
+			pinCallEntityIDBlacklist.emplace(blacklistPin, blacklistEntityID);
+			break;
+		}
+		case UpdateDataAction::BlacklistCallEntityType: {
+			pinCallEntityNameBlacklist.emplace(blacklistPin, blacklistEntityTypeName);
+			break;
+		}
 		case UpdateDataAction::ClearBlacklist:
 			pinBlacklist.clear();
+			pinCallEntityIDBlacklist.clear();
+			pinCallEntityNameBlacklist.clear();
 			break;
 		case UpdateDataAction::ToggleFreeze:
 			if (!frozenPinData.empty())
@@ -555,7 +584,7 @@ void PinCushion::OnFrameUpdate(const SGameUpdateEvent &p_UpdateEvent) {
 		auto filterLock = std::shared_lock(filterInputLock);
 		this->displayPinData.clear();
 		for (auto& data : this->pinData) {
-			auto filterThisPin = (!filterInputSV.empty() && !data.name.starts_with(filterInputSV));
+			auto filterThisPin = (!filterInputSV.empty() && !data.name.contains(filterInputSV));
 			if (filterThisPin) continue;
 			this->displayPinData.push_back(data);
 		}
@@ -598,6 +627,9 @@ DEFINE_PLUGIN_DETOUR(PinCushion, bool, OnPinOutput, ZEntityRef entity, uint32 pi
 	callData.entityTree = getEntityTree(entity);
 
 	if (pinCallEntityNameBlacklist.contains(std::make_pair(static_cast<ZHMPin>(pinId), callData.entityType))) {
+		return HookAction::Continue();
+	}
+	if (pinCallEntityIDBlacklist.contains(std::make_pair(static_cast<ZHMPin>(pinId), callData.entityId))) {
 		return HookAction::Continue();
 	}
 
@@ -710,7 +742,7 @@ DEFINE_PLUGIN_DETOUR(PinCushion, bool, OnPinOutput, ZEntityRef entity, uint32 pi
 		auto addThisCall = true;
 		{
 			auto filterEntityLock = std::shared_lock(filterEntityInputLock);
-			if (!filterEntityInputSV.empty() && callData.entityType != filterEntityInputSV)
+			if (!filterEntityInputSV.empty() && !callData.entityType.contains(filterEntityInputSV))
 				addThisCall = false;
 		}
 
@@ -736,8 +768,8 @@ DEFINE_PLUGIN_DETOUR(PinCushion, bool, OnPinOutput, ZEntityRef entity, uint32 pi
 	{
 		auto lock = std::shared_lock(filterInputLock);
 		auto filterEntityLock = std::shared_lock(filterEntityInputLock);
-		addThisPin = (filterInputSV.empty() || name.starts_with(filterInputSV))
-			&& (filterEntityInputSV.empty() || callData.entityType.starts_with(filterEntityInputSV));
+		addThisPin = (filterInputSV.empty() || name.contains(filterInputSV))
+			&& (filterEntityInputSV.empty() || callData.entityType.contains(filterEntityInputSV));
 	}
 
 	if (addThisPin) {

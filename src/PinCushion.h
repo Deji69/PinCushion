@@ -60,6 +60,8 @@ struct PinData {
 enum class UpdateDataAction {
 	None,
 	Blacklist,
+	BlacklistCallEntity,
+	BlacklistCallEntityType,
 	Clear,
 	ClearBlacklist,
 	ToggleFreeze,
@@ -96,6 +98,8 @@ private:
 
 private:
 	std::set<ZHMPin> pinBlacklist;
+	std::set<std::pair<ZHMPin, std::string>> pinCallEntityIDBlacklist;
+	std::set<std::pair<ZHMPin, std::string>> pinCallEntityNameBlacklist;
 	std::list<PinData> pinData;
 	std::vector<PinData> frozenPinData;
 	std::vector<PinData> displayPinData;
@@ -109,6 +113,7 @@ private:
 	double lastFreqPruneTime = 0;
 	UpdateDataAction updateDataAction = UpdateDataAction::None;
 	ZHMPin blacklistPin = static_cast<ZHMPin>(0);
+	std::string blacklistEntityID = "";
 	std::string blacklistEntityTypeName = "";
 	uint64 rateLimit = 15;
 	int uiRateLimit = 15;
