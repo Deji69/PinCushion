@@ -3,6 +3,7 @@
 #include <format>
 #include <imgui.h>
 #include <string>
+#include <Glacier/Reflection.h>
 
 using namespace std::string_literals;
 
@@ -46,12 +47,13 @@ static auto ZDynamicObjectToString(ZDynamicObject& obj) -> std::string {
 
 	// Use the game method for anything we don't need to handle.
 	ZString res;
-	Functions::ZDynamicObject_ToString->Call(const_cast<ZDynamicObject*>(&obj), &res);
+	Functions::ZDynamicObject_ToString->Call(const_cast<ZDynamicObject*>(&obj), res);
 	return std::string{res.ToStringView()};
 }
 
 PropertyInfo Properties::UnsupportedProperty(STypeID* p_Type, void* p_Data) {
-    return "<" + std::string(p_Type->typeInfo()->m_pTypeName) + ">";
+    auto typeInfo = p_Type->GetTypeInfo();
+    return "<" + std::string(typeInfo->pszTypeName) + ">";
 }
 
 PropertyInfo Properties::StringProperty(STypeID* p_Type, void* p_Data) {
@@ -125,7 +127,7 @@ PropertyInfo Properties::SColorRGBAProperty(STypeID* p_Type, void* p_Data) {
 
 PropertyInfo Properties::EnumProperty(STypeID* p_Type, void* p_Data) {
     auto s_Value = *static_cast<int32*>(p_Data);
-    auto s_Type = reinterpret_cast<IEnumType*>(p_Type->typeInfo());
+    auto s_Type = reinterpret_cast<IEnumType*>(p_Type->GetTypeInfo());
     return PropertyInfo_EnumValue{s_Type, s_Value};
 }
 

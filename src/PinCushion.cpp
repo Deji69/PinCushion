@@ -131,10 +131,10 @@ public:
 
 static auto ZObjectRefToString(const ZObjectRef& obj, std::string& out) {
 	auto type = obj.GetTypeID();
-	auto typeInfo = type ? type->typeInfo() : nullptr;
+	auto typeInfo = type ? type->GetTypeInfo() : nullptr;
 
 	if (typeInfo) {
-		const std::string s_TypeName = typeInfo->m_pTypeName;
+		const std::string s_TypeName = typeInfo->pszTypeName;
 		
 		PropertyInfo prop;
 		bool unk = false;
@@ -175,9 +175,9 @@ static auto ZObjectRefToString(const ZObjectRef& obj, std::string& out) {
 			prop = Properties::SColorRGBProperty(type, obj.As<SColorRGB>());
 		else if (s_TypeName == "SColorRGBA")
 			prop = Properties::SColorRGBAProperty(type, obj.As<SColorRGBA>());
-		else if (type->typeInfo()->isEnum())
+		else if (type->GetTypeInfo()->IsEnum())
 			prop = Properties::EnumProperty(type, reinterpret_cast<const ZObjectRefAccessible&>(obj).GetData());
-		else if (type->typeInfo()->isResource())
+		else if (type->GetTypeInfo()->IsResource())
 			prop = Properties::ResourceProperty(type, obj.As<ZResourcePtr>());
 		else if (s_TypeName == "ZRepositoryID")
 			prop = Properties::ZRepositoryIDProperty(type, obj.As<ZRepositoryID>());
@@ -230,14 +230,18 @@ static void CopyToClipboard(const std::string& p_String) {
 static auto getEntityLeafID(ZEntityRef entity) -> std::string {
 	auto type = entity->GetType();
 	if (!type) return "???";
-	return fmt::format("{:016x}", type->m_nEntityId);
+	return fmt::format("{:016x}", type->m_nEntityID);
 }
 
 static auto getEntityLeafName(ZEntityRef entity) -> std::string {
 	auto type = entity->GetType();
 	if (!type) return "???";
-	const auto& s_Interfaces = *type->m_pInterfaces;
-	return std::string(s_Interfaces[0].m_pTypeId->typeInfo()->m_pTypeName);
+	const auto& s_Interfaces = *type->m_pInterfaceData;
+	const auto typeID = s_Interfaces[0].m_Type;
+	if (!typeID) return "???";
+	const auto typeInfo = typeID->GetTypeInfo();
+	if (!typeInfo) return "???";
+	return std::string(typeInfo->pszTypeName);
 
 }
 
@@ -284,14 +288,14 @@ static auto displayProperties(PinCallData& call) -> void {
 			auto& enumVal = *prop.enumValue;
 			std::string s_CurrentValue;
 
-			for (auto& s_EnumValue : enumVal.type->m_entries) {
-				if (s_EnumValue.m_nValue != enumVal.value) continue;
-				s_CurrentValue = s_EnumValue.m_pName;
+			for (auto& s_EnumValue : enumVal.type->items) {
+				if (s_EnumValue.nValue != enumVal.value) continue;
+				s_CurrentValue = s_EnumValue.szName;
 			}
 
 			if (ImGui::BeginCombo(prop.inputId.c_str(), s_CurrentValue.c_str())) {
-				for (auto& s_EnumValue : enumVal.type->m_entries)
-					ImGui::Selectable(s_EnumValue.m_pName, s_EnumValue.m_nValue == enumVal.value);
+				for (auto& s_EnumValue : enumVal.type->items)
+					ImGui::Selectable(s_EnumValue.szName, s_EnumValue.nValue == enumVal.value);
 				ImGui::EndCombo();
 			}
 		}
@@ -628,15 +632,15 @@ DEFINE_PLUGIN_DETOUR(PinCushion, bool, OnPinOutput, ZEntityRef entity, uint32 pi
 
 	if (s_Factory) {
 		// This is also probably wrong.
-		auto s_Index = s_Factory->GetSubEntityIndex(entity->GetType()->m_nEntityId);
+		auto s_Index = s_Factory->GetSubEntityIndex(entity->GetType()->m_nEntityID);
 
 		if (s_Index != -1 && s_Factory->m_pTemplateEntityBlueprint)
 			callData.entityName = s_Factory->m_pTemplateEntityBlueprint->subEntities[s_Index].entityName;
 	}
 
-	const auto& s_Interfaces = *entity->GetType()->m_pInterfaces;
-	callData.entityId = fmt::format("{:016x}", entity->GetType()->m_nEntityId);
-	callData.entityType = s_Interfaces[0].m_pTypeId->typeInfo()->m_pTypeName;
+	const auto& s_Interfaces = *entity->GetType()->m_pInterfaceData;
+	callData.entityId = fmt::format("{:016x}", entity->GetType()->m_nEntityID);
+	callData.entityType = s_Interfaces[0].m_Type->GetTypeInfo()->pszTypeName;
 	callData.entityTree = getEntityTree(entity);
 
 	if (pinCallEntityNameBlacklist.contains(std::make_pair(static_cast<ZHMPin>(pinId), callData.entityType))) {
@@ -646,31 +650,29 @@ DEFINE_PLUGIN_DETOUR(PinCushion, bool, OnPinOutput, ZEntityRef entity, uint32 pi
 		return HookAction::Continue();
 	}
 
-	if (s_EntityType && s_EntityType->m_pProperties01) {
-		for (uint32_t i = 0; i < s_EntityType->m_pProperties01->size(); ++i) {
-			ZEntityProperty* s_Property = &s_EntityType->m_pProperties01->operator[](i);
-			if (!s_Property->m_pType)
+	if (s_EntityType && s_EntityType->m_pPropertyData) {
+		for (uint32_t i = 0; i < s_EntityType->m_pPropertyData->size(); ++i) {
+			auto s_Property = &s_EntityType->m_pPropertyData->operator[](i);
+			auto propertyInfo = s_Property->GetPropertyInfo();
+			if (!propertyInfo)
+				continue;
+			if (!propertyInfo->m_propertyInfo.m_Type)
 				continue;
 
-			const auto* s_PropertyInfo = s_Property->m_pType->getPropertyInfo();
-
-			if (!s_PropertyInfo || !s_PropertyInfo->m_pType)
-				continue;
-
-			const auto s_PropertyAddress = reinterpret_cast<uintptr_t>(entity.m_pEntity) + s_Property->m_nOffset;
-			const auto s_PropertyType = s_PropertyInfo->m_pType;
-			const auto s_TypeInfo = s_PropertyType->typeInfo();
+			const auto s_PropertyAddress = reinterpret_cast<uintptr_t>(entity.m_pObj) + s_Property->m_nPropertyOffset;
+			const auto s_PropertyType = propertyInfo->m_propertyInfo.m_Type;
+			const auto s_TypeInfo = s_PropertyType->GetTypeInfo();
 			const uint16_t s_TypeSize = s_TypeInfo->m_nTypeSize;
 			const uint16_t s_TypeAlignment = s_TypeInfo->m_nTypeAlignment;
 
 			auto* s_Data = (*Globals::MemoryManager)->m_pNormalAllocator->AllocateAligned(s_TypeSize, s_TypeAlignment);
 
-			if (s_PropertyInfo->m_nFlags & EPropertyInfoFlags::E_HAS_GETTER_SETTER)
-				s_PropertyInfo->get(reinterpret_cast<void*>(s_PropertyAddress), s_Data, s_PropertyInfo->m_nOffset);
+			if (propertyInfo->m_propertyInfo.m_Flags & EPropertyInfoFlags::E_HAS_GETTER_SETTER)
+				propertyInfo->m_propertyInfo.m_PropetyGetter(reinterpret_cast<void*>(s_PropertyAddress), s_Data, s_Property->m_nPropertyOffset);
 			else
-				s_TypeInfo->m_pTypeFunctions->copyConstruct(s_Data, reinterpret_cast<void*>(s_PropertyAddress));
+				s_TypeInfo->m_pTypeFunctions->placementCopyConstruct(s_Data, reinterpret_cast<void*>(s_PropertyAddress));
 
-			const std::string s_TypeName = s_TypeInfo->m_pTypeName;
+			const std::string s_TypeName = s_TypeInfo->pszTypeName;
 			const std::string s_InputId = std::format("##Property{}", i);
 
 			PropertyInfo prop;
@@ -715,9 +717,9 @@ DEFINE_PLUGIN_DETOUR(PinCushion, bool, OnPinOutput, ZEntityRef entity, uint32 pi
 				prop = Properties::ZRepositoryIDProperty(s_PropertyType, static_cast<ZRepositoryID*>(s_Data));
 			else if (s_TypeName == "ZDynamicObject")
 				prop = Properties::ZDynamicObjectProperty(s_PropertyType, static_cast<ZDynamicObject*>(s_Data));
-			else if (s_PropertyInfo->m_pType->typeInfo()->isEnum())
+			else if (s_PropertyType->GetTypeInfo()->IsEnum())
 				prop = Properties::EnumProperty(s_PropertyType, s_Data);
-			else if (s_PropertyInfo->m_pType->typeInfo()->isResource())
+			else if (s_PropertyType->GetTypeInfo()->IsResource())
 				prop = Properties::ResourceProperty(s_PropertyType, s_Data);
 			//else if (s_TypeName.starts_with("TEntityRef<"))
 			//	Properties::TEntityRefProperty(s_InputId, s_Entity, s_Property, s_Data);
@@ -729,15 +731,15 @@ DEFINE_PLUGIN_DETOUR(PinCushion, bool, OnPinOutput, ZEntityRef entity, uint32 pi
 
 			(*Globals::MemoryManager)->m_pNormalAllocator->Free(s_Data);
 
-			prop.hasNoDirectName = s_PropertyInfo->m_pType->typeInfo()->isResource() || s_PropertyInfo->m_nPropertyID != s_Property->m_nPropertyId;
+			prop.hasNoDirectName = s_PropertyType->GetTypeInfo()->IsResource() || propertyInfo->m_nPropertyID != s_Property->m_nPropertyID;
 			if (prop.hasNoDirectName) {
-				const auto s_PropertyName = HM3_GetPropertyName(s_Property->m_nPropertyId);
+				const auto s_PropertyName = HM3_GetPropertyName(s_Property->m_nPropertyID);
 
 				prop.name = s_PropertyName.Size > 0
 					? std::string(s_PropertyName.Data, s_PropertyName.Size)
-					: std::format("~{:#08x}", s_Property->m_nPropertyId);
+					: std::format("~{:#08x}", s_Property->m_nPropertyID);
 			}
-			else prop.name = s_PropertyInfo->m_pName;
+			else prop.name = propertyInfo->m_pszPropertyName;
 
 			callData.props.push_back(std::move(prop));
 		}

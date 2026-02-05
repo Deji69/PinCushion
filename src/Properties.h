@@ -1,11 +1,11 @@
 #pragma once
-#include <Glacier/IEnumType.h>
 #include <Glacier/SColorRGB.h>
 #include <Glacier/SColorRGBA.h>
-#include <Glacier/ZEntity.h>
+#include <Glacier/Reflection.h>
+#include <Glacier/ZPrimitives.h>
 #include <Glacier/ZMath.h>
 #include <Glacier/ZObject.h>
-#include <Glacier/ZResource.h>
+#include <format>
 #include <string>
 #include <optional>
 
@@ -78,9 +78,9 @@ public:
                 auto& enumVal = *this->enumValue;
                 str = "";
 
-                for (auto& s_EnumValue : enumVal.type->m_entries) {
-                    if (s_EnumValue.m_nValue != enumVal.value) continue;
-                    str = s_EnumValue.m_pName;
+                for (auto& s_EnumValue : enumVal.type->items) {
+                    if (s_EnumValue.nValue != enumVal.value) continue;
+                    str = s_EnumValue.szName;
                 }
 
                 if (str->empty()) str = std::to_string(enumVal.value);
