@@ -108,6 +108,7 @@ private:
 	std::chrono::system_clock::time_point lastDisplayUpdateTime;
 	std::shared_mutex displayDataLock;
 	std::shared_mutex filterInputLock;
+	std::shared_mutex filterEntityIDInputLock;
 	std::shared_mutex filterEntityInputLock;
 	double lastLogTime = 0;
 	double lastFreqPruneTime = 0;
@@ -121,8 +122,10 @@ private:
 	bool hooksInstalled = false;
 	bool m_ShowMessage = false;
 	char filterInput[40] = "";
+	char filterEntityIDInput[40] = "";
 	char filterEntityInput[40] = "";
 	std::string_view filterInputSV;
+	std::string_view filterEntityIDInputSV;
 	std::string_view filterEntityInputSV;
 };
 

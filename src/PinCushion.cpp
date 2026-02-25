@@ -382,6 +382,11 @@ void PinCushion::OnDrawUI(bool p_HasFocus) {
 			filterInputSV = filterInput;
 		}
 
+		if (ImGui::InputText("Filter Entity ID", filterEntityIDInput, sizeof(filterEntityIDInput))) {
+			auto lock = std::unique_lock(filterEntityIDInputLock);
+			filterEntityIDInputSV = filterEntityIDInput;
+		}
+
 		if (ImGui::InputText("Filter Entity Type", filterEntityInput, sizeof(filterEntityInput))) {
 			auto lock = std::unique_lock(filterEntityInputLock);
 			filterEntityInputSV = filterEntityInput;
@@ -760,6 +765,11 @@ DEFINE_PLUGIN_DETOUR(PinCushion, bool, OnPinOutput, ZEntityRef entity, uint32 pi
 			if (!filterEntityInputSV.empty() && !callData.entityType.contains(filterEntityInputSV))
 				addThisCall = false;
 		}
+		{
+			auto filterEntityIDLock = std::shared_lock(filterEntityIDInputLock);
+			if (!filterEntityIDInputSV.empty() && !callData.entityId.contains(filterEntityIDInputSV))
+				addThisCall = false;
+		}
 
 		if (addThisCall) {
 			++lastPin->timesCalled;
@@ -784,7 +794,8 @@ DEFINE_PLUGIN_DETOUR(PinCushion, bool, OnPinOutput, ZEntityRef entity, uint32 pi
 		auto lock = std::shared_lock(filterInputLock);
 		auto filterEntityLock = std::shared_lock(filterEntityInputLock);
 		addThisPin = (filterInputSV.empty() || name.contains(filterInputSV))
-			&& (filterEntityInputSV.empty() || callData.entityType.contains(filterEntityInputSV));
+			&& (filterEntityInputSV.empty() || callData.entityType.contains(filterEntityInputSV))
+			&& (filterEntityIDInputSV.empty() || callData.entityId.contains(filterEntityIDInputSV));
 	}
 
 	if (addThisPin) {
