@@ -4,10 +4,8 @@
 #include <IconsMaterialDesign.h>
 #include <ResourceLib_HM3.h>
 #include <Globals.h>
-#include <Glacier/Enums.h>
 #include <Glacier/Pins.h>
 #include <Glacier/ZGameLoopManager.h>
-#include <Glacier/ZGeomEntity.h>
 #include <Glacier/ZModule.h>
 #include <Glacier/ZScene.h>
 #include <algorithm>
@@ -16,6 +14,8 @@
 #include <set>
 #include <map>
 #include <string>
+#include <IModSDK.h>
+#include <imgui.h>
 
 using namespace std::string_literals;
 using namespace std::string_view_literals;
@@ -263,7 +263,7 @@ static auto getEntityTree(ZEntityRef entity) -> std::vector<NameIDPair> {
 	return tree;
 }
 
-static auto displayProperties(PinCallData& call) -> void {
+static auto displayProperties(PinCallData& call, int index) -> void {
 	auto separate = false;
 	for (auto& prop : call.props) {
 		if (separate) ImGui::Separator();
@@ -280,10 +280,16 @@ static auto displayProperties(PinCallData& call) -> void {
 
 		ImGui::PushItemWidth(-1);
 
-		if (prop.rgb)
-			ImGui::ColorEdit3(prop.inputId.c_str(), &prop.rgb->r, ImGuiColorEditFlags_NoInputs);
-		else if (prop.rgba)
-			ImGui::ColorEdit4(prop.inputId.c_str(), &prop.rgba->r, ImGuiColorEditFlags_NoInputs);
+		static char buff[200] = {};
+
+		if (prop.rgb) {
+			std::format_to(buff, "{}##{}", prop.inputId.c_str(), index);
+			ImGui::ColorEdit3(buff, &prop.rgb->r, ImGuiColorEditFlags_NoInputs);
+		}
+		else if (prop.rgba) {
+			std::format_to(buff, "{}##{}", prop.inputId.c_str(), index);
+			ImGui::ColorEdit4(buff, &prop.rgba->r, ImGuiColorEditFlags_NoInputs);
+		}
 		else if (prop.enumValue) {
 			auto& enumVal = *prop.enumValue;
 			std::string s_CurrentValue;
@@ -293,9 +299,12 @@ static auto displayProperties(PinCallData& call) -> void {
 				s_CurrentValue = s_EnumValue.szName;
 			}
 
-			if (ImGui::BeginCombo(prop.inputId.c_str(), s_CurrentValue.c_str())) {
-				for (auto& s_EnumValue : enumVal.type->items)
+			std::format_to(buff, "{}##{}", prop.inputId.c_str(), index);
+
+			if (ImGui::BeginCombo(buff, s_CurrentValue.c_str())) {
+				for (auto& s_EnumValue : enumVal.type->items) {
 					ImGui::Selectable(s_EnumValue.szName, s_EnumValue.nValue == enumVal.value);
+				}
 				ImGui::EndCombo();
 			}
 		}
@@ -463,9 +472,9 @@ void PinCushion::OnDrawUI(bool p_HasFocus) {
 
 			int i = 0;
 
-			for (auto it = pin.calls.begin(); current < std::min<size_t>(pin.calls.size(), 5) && it != pin.calls.end(); ++it, ++current) {
-				auto blacklistEntityLabel = std::format("Blacklist Entity##{}", i++);
-				auto blacklistEntityTypeLabel = std::format("Blacklist Entity Type##{}", i++);
+			for (auto it = pin.calls.begin(); current < std::min<size_t>(pin.calls.size(), 5) && it != pin.calls.end(); ++it, ++current, ++i) {
+				auto blacklistEntityLabel = std::format("Blacklist Entity##{}", i);
+				auto blacklistEntityTypeLabel = std::format("Blacklist Entity Type##{}", i);
 
 				if (ImGui::Button(blacklistEntityLabel.c_str()) && !this->haveUpdateDataAction()) {
 					this->updateDataAction = UpdateDataAction::BlacklistCallEntity;
@@ -507,7 +516,7 @@ void PinCushion::OnDrawUI(bool p_HasFocus) {
 				ImGui::TextUnformatted("Entity Props");
 
 				ImGui::Indent(20);
-				displayProperties(call);
+				displayProperties(call, i);
 				ImGui::Unindent(20);
 
 				ImGui::Separator();
