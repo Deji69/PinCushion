@@ -28,7 +28,7 @@ std::set<uint32> permaBlacklist = {
 	uint32(ZHMPin::OnValue),
 	uint32(ZHMPin::OnTrue),
 	uint32(ZHMPin::OnFalse),
-	uint32(ZHMPin::OnTriggeredEvent01),
+	/*uint32(ZHMPin::OnTriggeredEvent01),
 	uint32(ZHMPin::OnTriggeredEvent02),
 	uint32(ZHMPin::OnTriggeredEvent03),
 	uint32(ZHMPin::OnTriggeredEvent04),
@@ -63,7 +63,7 @@ std::set<uint32> permaBlacklist = {
 	uint32(ZHMPin::OutRGB),
 	uint32(ZHMPin::OutRGBA),
 	uint32(ZHMPin::Vector2),
-	uint32(ZHMPin::Vector3),
+	uint32(ZHMPin::Vector3),*/
 	//uint32(ZHMPin::On),
 	//uint32(ZHMPin::Off),
 	uint32(ZHMPin::PositionOutput),
